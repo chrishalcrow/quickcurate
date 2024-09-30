@@ -1,0 +1,29 @@
+[project]
+name = "quickcurate"
+version = '0.0.1'
+authors = [
+  { name="Chris Halcrow", email="chalcrow@ed.ac.uk" },
+]
+
+description = "Text-based curator for spikeinterface report folders"
+readme = "README.md"
+requires-python = ">3.8"
+
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "Pillow",
+    "matplotlib-backend-kitty",
+]
+
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["quickcurate"]
+
+[project.scripts]
+quickcurate = "quickcurate.cli:main"
+
+
