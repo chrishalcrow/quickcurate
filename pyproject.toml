@@ -5,15 +5,13 @@ authors = [
   { name="Chris Halcrow", email="chalcrow@ed.ac.uk" },
 ]
 
-description = "Text-based curator for spikeinterface report folders"
+description = "Text-based curator for spikeinterface `SortingAnalyzer`s"
 readme = "README.md"
 requires-python = ">3.8"
 
 dependencies = [
-    "numpy",
+    "spikeinterface",
     "matplotlib",
-    "Pillow",
-    "matplotlib-backend-kitty",
 ]
 
 [build-system]
@@ -22,8 +20,3 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["quickcurate"]
-
-[project.scripts]
-quickcurate = "quickcurate.cli:main"
-
-

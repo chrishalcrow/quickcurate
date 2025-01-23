@@ -1,12 +1,17 @@
-import matplotlib
 import matplotlib.pyplot as plt
-
-from PIL import Image
-import os
-import matplotlib.pyplot as plt
-import numpy as np
 import json
-from pathlib import Path
+
+from IPython.display import clear_output
+
+from spikeinterface.widgets import UnitSummaryWidget
+from spikeinterface import load_sorting_analyzer
+
+def print_logo():
+    print("\t  _   _  ")
+    print("\t (q)_(p) ")
+    print("\t \ . . /    Quick")
+    print("\t =\ t /=      Curate")
+    print("\t   \_/\n")
 
 def make_label_dict(label_list):
     label_dict = {}
@@ -27,39 +32,41 @@ def question_text(label_dict):
     txt += "? "
     return txt
 
-def crop_img(img):
+def are_label_rules_broken(labels):
 
-    crop_left = 0
-    while np.all(img[:,crop_left] == [255,255,255,255]) == True:
-        crop_left += 1
+    user_label_letter_list = [ label[0] for label in labels ]
 
-    crop_top = 0
-    while np.all(img[crop_top,:] == [255,255,255,255]) == True:
-        crop_top += 1
+    if len(set(user_label_letter_list)) != len(user_label_letter_list):
+        rules_broken = True
+        print("\nYou've broken RULE #1: each label must start with a different letter!!!!!!!!")
+    elif 'u' in  user_label_letter_list:
+        rules_broken = True
+        print("\nYou've broken RULE #2: no label may start with u (this is resered for undoing)!!!!!!!!")
+    else:
+        rules_broken = False
 
-    crop_right = np.shape(img)[1] - 1
-    while np.all(img[:,crop_right] == [255,255,255,255]) == True:
-        crop_right -= 1
+    return rules_broken
 
-    crop_bottom = np.shape(img)[0] - 1
-    while np.all(img[crop_bottom,:] == [255,255,255,255]) == True:
-        crop_bottom -= 1
-
-    return img[crop_top:crop_bottom,crop_left:crop_right,:]
-
-def curate(labels=None, report_folder=None, output_file=None):
+def curate(
+        labels=None, 
+        sorting_analyzer=None, 
+        output_file=None, 
+        figsize=None
+    ):
     """
-    Launch a diaglog allowing the user to curate units based on the images
-    in a `spikeinterface` report folder.
+    Launch a diaglog allowing the user to curate units based a `spikeinterface` 
+    Sorting Analyzer.
 
     Parameters
     ----------
     labels : list of str, default: None
         List of labels used for curation.
-    report_folder : str or Path, default: None
-        Path to a `spikeinterface` report folder.
-    output_file, str or Path, default: None
+    sorting_analyzer : SortingAnalyzer, default: None
+        A `spikeinterface` SortingAnalyzer, to curate.
+    output_file : str, default: None
         File to output the results in. If None, no file is saved.
+    figsize : tuple, default: None
+        Size of figure, e.g., (10,5) passed to matplotlib.
     
     Returns
     -------
@@ -68,66 +75,49 @@ def curate(labels=None, report_folder=None, output_file=None):
     """
 
     assert labels is not None, "Please supply `labels` e.g. curate(labels = ['good', 'bad'])"
+    assert are_label_rules_broken(labels) is False, "Your labels have broken the rules.\n\nRULES:\n\t1. Each word must start with a different letter.\n\t2. None of these letters can be u."
 
+    assert sorting_analyzer is not None, "Please supply a `sorting_analyzer` e.g. curate(sorting_analyzer = my_sa)"
+
+    print_logo()
     label_dict = make_label_dict(labels)
 
-    using_jupyter = False
-    if matplotlib.get_backend() == "macosx":
-        matplotlib.use('module://matplotlib-backend-kitty')
-    elif matplotlib.get_backend() == "module://matplotlib_inline.backend_inline":
-        using_jupyter = True
-        from IPython.display import clear_output
-
-    if output_file is not None:
-        keep_file = "n"
-        while os.path.isfile(output_file) and keep_file != "y":
-            keep_file = input(f"The file '{output_file}' already exists. Doing this curation will OVERWRITE the file.\nDo you want to conintue (y/n)? ")
-            if keep_file == "n":
-                print("\nYou can specify the output_file path when you run quickcurate as follows:\n\tquickcurate 'report_folder' --output_file 'my_output_file.json'\n")
-                return
-            print("")
-
-    units_folder = Path(report_folder) / Path('units')
-
-    file_names = os.listdir(units_folder)
-    unit_list = [ int(file_name.split('.')[0]) for file_name in file_names ]
-    unit_list = sorted(unit_list)
-    sorted_file_names = [ str(unit) + '.png' for unit in unit_list ]
-
     curation_dict = {}
-    a = 0
-    while a < len(sorted_file_names):
+    a=0
+
+    print("Making first plot (takes extra time as caching is taking place...)")
+    while a < len(sorting_analyzer.unit_ids):
         
-        file_name = sorted_file_names[a] 
-        unit_id = file_name.split('.')[0]
+        unit_id = sorting_analyzer.unit_ids[a]
 
         exit_time = False
         undo_time = False
 
-        print()
-        
-        img = crop_img(np.asarray(Image.open(units_folder / file_name)))
-        imgplot = plt.imshow(img)
-        plt.axis('off')
-        plt.tight_layout()
+        fig = plt.figure(figsize=figsize)
+        UnitSummaryWidget(
+            sorting_analyzer, 
+            unit_id=unit_id, 
+            figure=fig,
+            subwidget_kwargs = {
+                'unit_locations': {'plot_all_units': False},
+                }
+        )
+        clear_output(wait=True)
         plt.show()
 
         unit_label = False
         while unit_label not in label_dict:
-            if unit_label is False:
-                True
-            elif unit_label.lower() == 'u':
-                undo_time = True
-                print("Going back one unit...")
-                a = max(a-1,0)
-                if using_jupyter:
-                    clear_output(wait=True)
-                break
-            elif unit_label == "exit":
-                exit_time = True
-                break
-            elif unit_label not in label_dict:
-                print(f"{unit_label} is not an accepted label name.")
+            if unit_label is not False:
+                if unit_label.lower() == 'u':
+                    undo_time = True
+                    print("Going back one unit...")
+                    a = max(a-1,0)
+                    break
+                elif unit_label == "exit":
+                    exit_time = True
+                    break
+                elif unit_label not in label_dict:
+                    print(f"{unit_label} is not an accepted label name.")
 
             unit_label = input(question_text(label_dict))
 
@@ -136,19 +126,15 @@ def curate(labels=None, report_folder=None, output_file=None):
         if undo_time is True:
             continue
         
-        if using_jupyter:
-            clear_output(wait=True)
-
-        print(f"You lablled unit {unit_id} as {unit_label + label_dict[unit_label]}.")
-        
         curation_dict[unit_id] = unit_label + label_dict[unit_label]
+        print(f"You lablled unit {unit_id} as {unit_label + label_dict[unit_label]}.")
+        a += 1
 
         if output_file is not None:
             with open(output_file, 'w') as json_file:
                 json.dump(curation_dict, json_file)
 
-        a += 1
-
+    clear_output(wait=True)
     print(f"\nPhew - tiring work! You labelled {a} units.")
     if output_file is not None:
         print(f"The curated unit dict can be found at {output_file}.")
